@@ -1,0 +1,373 @@
+package redis
+
+import (
+	"github.com/garyburd/redigo/redis"
+	"log"
+	"time"
+)
+
+type RedisConf struct {
+	Network        string
+	Address        string
+	ConnectTimeout time.Duration
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	BlockTimeout   int64
+}
+
+type RedisConn struct {
+	conn redis.Conn
+}
+
+func NewRedisConn(redisConf RedisConf) *RedisConn {
+	c, err := redis.DialTimeout(redisConf.Network, redisConf.Address, redisConf.ConnectTimeout, redisConf.ReadTimeout, redisConf.WriteTimeout)
+	if err != nil {
+		log.Fatal("(NewRedisConn) ", err)
+	}
+	return &RedisConn{
+		conn: c,
+	}
+}
+
+func (redisConn *RedisConn) Close() {
+	redisConn.conn.Close()
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Keys operation
+///////////////////////////////////////////////////////////////////////////////
+
+// GetKeys return the keys match the pattern in redis
+// output:a keys string slice
+func (redisConn *RedisConn) GetKeys(pattern string) []string {
+	keys := make([]string, 0, 16)
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("KEYS", pattern)
+		if err != nil {
+			log.Panic("(GetKeys) ", err)
+		}
+		if r != nil {
+			v, err := redis.Values(r, err)
+			if err != nil {
+				log.Panic("(GetKeys) ", err)
+			}
+			for _, key := range v {
+				keys = append(keys, string(key.([]uint8)))
+			}
+		}
+	}
+	return keys
+}
+
+// KeyType return the string representation of key
+// output:none,string,list,hash,set,zset
+func (redisConn *RedisConn) KeyType(key string) string {
+	var keyType string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("TYPE", key)
+		if err != nil {
+			log.Panic("(KeyType) ", err)
+		}
+		keyType = string(r.([]uint8))
+	}
+	return keyType
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Strings operation
+///////////////////////////////////////////////////////////////////////////////
+
+// Set set a key value pair in redis
+// output:return string "OK"
+func (redisConn *RedisConn) Set(key string, value string) string {
+	var result string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SET", key, value)
+		if err != nil {
+			log.Panic("(Set) ", err)
+		}
+		result = r.(string)
+	}
+	return result
+}
+
+// Get return a value of a key
+// output:1)if the key exist and is a string, return its value,
+//        2)else,return null string
+func (redisConn *RedisConn) Get(key string) string {
+	var result string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("GET", key)
+		if err != nil {
+			log.Panic("(Get) ", err)
+		}
+		result = r.(string)
+	}
+	return result
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Hashs operation
+///////////////////////////////////////////////////////////////////////////////
+
+// HashSet set a field to value if the field is not exist,or update the value of
+// the field
+// input:
+//     1)key which represent the hash table;
+//     2)field;
+//     3)value
+// output:
+//     if the field is not exist,return 1,else return 0
+func (redisConn *RedisConn) HashSet(ht string, field string, value string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("HSET", ht, field, value)
+		if err != nil {
+			log.Panic("(HashSet) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+func (redisConn *RedisConn) HashGet(ht string, field string) string {
+	var result string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("HGET", ht, field)
+		if err != nil {
+			log.Panic("(HashGet) ", err)
+		}
+		result = string(r.([]uint8))
+	}
+	return result
+}
+
+func (redisConn *RedisConn) HashIncrby(ht string, field string, increment int) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("HINCRBY", ht, field, increment)
+		if err != nil {
+			log.Panic("(HashIncrby) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Lists operation
+///////////////////////////////////////////////////////////////////////////////
+
+// ListLen return the lenght of a list
+// output:the lenght of list
+func (redisConn *RedisConn) ListLen(list string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("LLEN", list)
+		if err != nil {
+			log.Panic("(ListLen) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+func (redisConn *RedisConn) ListRange(list string, start, end int) []string {
+	items := make([]string, 0, 16)
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("LRANGE", list, start, end)
+		if err != nil {
+			log.Panic("(ListRange) ", err)
+		}
+		if r != nil {
+			v, err := redis.Values(r, err)
+			if err != nil {
+				log.Panic("(ListRange) ", err)
+			}
+			for _, item := range v {
+				items = append(items, string(item.([]uint8)))
+			}
+		}
+	}
+	return items
+}
+
+// ListLeftPush push an item into a list at the left side of the list
+// output:the lenght of list after push this item
+func (redisConn *RedisConn) ListLeftPush(list, item string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("LPUSH", list, item)
+		if err != nil {
+			log.Panic("(ListLeftPush) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+// ListLeftPop return the most left side element of a list
+// output:if list a items return the most left side element,else,return null string
+func (redisConn *RedisConn) ListLeftPop(list string) string {
+	var result string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("LPOP", list)
+		if err != nil {
+			log.Panic("(ListLeftPop) ", err)
+		}
+		if r == nil {
+			result = ""
+		} else {
+			result = string(r.([]uint8))
+		}
+	}
+	return result
+}
+
+// ListRightPush push an item into a list at the right side of the list
+// output:the lenght of list after push this item
+func (redisConn *RedisConn) ListRightPush(list, item string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("RPUSH", list, item)
+		if err != nil {
+			log.Panic("(ListRightPush) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+// ListRightPop return the most right side element of a list
+// output:if list a items return the most right side element,else,return null string
+func (redisConn *RedisConn) ListRightPop(list string) string {
+	var result string
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("RPOP", list)
+		if err != nil {
+			log.Panic("(ListRightPop) ", err)
+		}
+		if r == nil {
+			result = ""
+		} else {
+			result = string(r.([]uint8))
+		}
+	}
+	return result
+}
+
+// BlockListLeftPop return the most left side element of a list,when the list we want to
+// pop have no element,block at most timeout seconds
+// input:
+//     1)list name type of string;
+//     2)timeout second type of int64
+// output:
+//     if success,return a <list,item> pair;else return a <"",""> pair
+func (redisConn *RedisConn) BlockListLeftPop(list string, timeout int64) (string, string) {
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("BLPOP", list, timeout)
+		if err != nil {
+			log.Panic("(BlockListLeftPop) ", err)
+		}
+		if r != nil {
+			v, err := redis.Values(r, err)
+			if err != nil {
+				log.Panic("(BlockListLeftPop) ", err)
+			}
+			listname := string(v[0].([]uint8))
+			item := string(v[1].([]uint8))
+			return listname, item
+		}
+	}
+	return "", ""
+}
+
+// BlockListRightPop return the most right side element of a list,when the list we want to
+// pop have no element,block at most timeout seconds
+// input:
+//     1)list name type of string;
+//     2)timeout second type of int64
+// output:
+//     if success,return a <list,item> pair;else return a <"",""> pair
+func (redisConn *RedisConn) BlockListRightPop(list string, timeout int64) (string, string) {
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("BRPOP", list, timeout)
+		if err != nil {
+			log.Panic("(BlockListRightPop) ", err)
+		}
+		if r != nil {
+			v, err := redis.Values(r, err)
+			if err != nil {
+				log.Panic("(BlockListRightPop) ", err)
+			}
+			listname := string(v[0].([]uint8))
+			item := string(v[1].([]uint8))
+			return listname, item
+		}
+	}
+	return "", ""
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Sets operation
+///////////////////////////////////////////////////////////////////////////////
+
+func (redisConn *RedisConn) SetAdd(set string, member string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SADD", set, member)
+		if err != nil {
+			log.Panic("(SetAdd) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+func (redisConn *RedisConn) SetIsMember(set string, member string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SISMEMBER", set, member)
+		if err != nil {
+			log.Panic("(SetIsMember) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Sorted Sets operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////
+// Pub/Sub operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////
+// Transactions operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////
+// Scripting operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////
+// Connection operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+///////////////////////////////////////////////////////////////////////////////
+// Server operation
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO
