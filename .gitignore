@@ -9,6 +9,9 @@ _test
 bin
 pkg
 
+#third packages
+src/github.com/garyburd/
+
 # Architecture specific extensions/prefixes
 *.[568vq]
 [568vq].out
