@@ -19,6 +19,13 @@ type RedisConn struct {
 	conn redis.Conn
 }
 
+type Slowlog struct {
+	Id            int64
+	Log_timestamp int64
+	Time_consumed int64
+	Cmd           string
+}
+
 func NewRedisConn(redisConf RedisConf) *RedisConn {
 	c, err := redis.DialTimeout(redisConf.Network, redisConf.Address, redisConf.ConnectTimeout, redisConf.ReadTimeout, redisConf.WriteTimeout)
 	if err != nil {
@@ -371,3 +378,50 @@ func (redisConn *RedisConn) SetIsMember(set string, member string) int64 {
 ///////////////////////////////////////////////////////////////////////////////
 
 // TODO
+func (redisConn *RedisConn) GetSlowlog() []Slowlog {
+	slowlogs := make([]Slowlog, 0, 16)
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("slowlog", "get")
+		if err != nil {
+			log.Panic("(GetSlowlog) ", err)
+		}
+
+		slogs, errForValues := redis.Values(r, err) // convert interface{} to []interface{}
+		if errForValues != nil {
+			log.Panic("(GetSlowlog) ", errForValues)
+		}
+		for _, slog := range slogs { // each log is type of interface{}
+			var slowlog Slowlog
+			slog_items, errForValues := redis.Values(slog, err) // convert interface{} to []interface{}
+
+			if errForValues != nil {
+				log.Panic("(GetSlowlog) ", errForValues)
+			}
+			for i, slog_item := range slog_items { // each log item is type of interface{}
+				switch slog_item.(type) {
+				case int64:
+					if i == 0 {
+						slowlog.Id = slog_item.(int64)
+					} else if i == 1 {
+						slowlog.Log_timestamp = slog_item.(int64)
+					} else if i == 2 {
+						slowlog.Time_consumed = slog_item.(int64)
+					}
+
+				case interface{}: // each cmd is type of interface{}
+					cmd_items, errForValues := redis.Values(slog_item, err) //  get each cmd item
+					if errForValues != nil {
+						log.Panic("(GetSlowlog) ", errForValues)
+					}
+					var cmd string
+					for _, cmd_item := range cmd_items {
+						cmd = cmd + string(cmd_item.([]uint8)) + " "
+					}
+					slowlog.Cmd = cmd
+				}
+			} // end of loop for each log
+			slowlogs = append(slowlogs, slowlog)
+		} // end of loop for all logs
+	} // end of main if
+	return slowlogs
+}
