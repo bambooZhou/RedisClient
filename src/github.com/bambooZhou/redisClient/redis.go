@@ -331,6 +331,18 @@ func (redisConn *RedisConn) SetAdd(set string, member string) int64 {
 	return result
 }
 
+func (redisConn *RedisConn) SetRem(set string, member string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SREM", set, member)
+		if err != nil {
+			log.Panic("(SetRem) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
 func (redisConn *RedisConn) SetIsMember(set string, member string) int64 {
 	var result int64
 	if redisConn != nil {
@@ -341,6 +353,40 @@ func (redisConn *RedisConn) SetIsMember(set string, member string) int64 {
 		result = r.(int64)
 	}
 	return result
+}
+
+// SetCard returns the set cardinality (number of elements) of the set stored at set
+func (redisConn *RedisConn) SetCard(set string) int64 {
+	var result int64
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SCARD", set)
+		if err != nil {
+			log.Panic("(SetCard) ", err)
+		}
+		result = r.(int64)
+	}
+	return result
+}
+
+// SetMembers returns all the members of the set value stored at set
+func (redisConn *RedisConn) SetMembers(set string) []string {
+	members := make([]string, 0, 16)
+	if redisConn != nil {
+		r, err := redisConn.conn.Do("SMEMBERS", set)
+		if err != nil {
+			log.Panic("(SetMembers) ", err)
+		}
+		if r != nil {
+			v, err := redis.Values(r, err)
+			if err != nil {
+				log.Panic("(SetMembers) ", err)
+			}
+			for _, member := range v {
+				members = append(members, string(member.([]uint8)))
+			}
+		}
+	}
+	return members
 }
 
 ///////////////////////////////////////////////////////////////////////////////
