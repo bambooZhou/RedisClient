@@ -1,4 +1,4 @@
-package redis
+package redisClient
 
 import (
 	"github.com/garyburd/redigo/redis"
